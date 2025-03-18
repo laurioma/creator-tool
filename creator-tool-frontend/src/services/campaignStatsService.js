@@ -1,19 +1,13 @@
-import { onRequest, pubsub } from 'firebase-functions';
-import { initializeApp } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import fetch from 'node-fetch';
+import { db } from '../firebase';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import {
   extractPlatformFromUrl,
   extractPostIdFromUrl,
   parseInstagramStats,
   parseTikTokStats,
   parseYouTubeStats
-} from '../creator-tool-frontend/src/shared/parsers/socialMediaParser.js';
+} from '../shared/parsers/socialMediaParser';
 
-initializeApp();
-const db = getFirestore();
-
-// Reuse the same scraping logic from the frontend
 const PROXY_URL = 'https://api.allorigins.win/raw?url=';
 
 const fetchInstagramStats = async (postId) => {
@@ -49,7 +43,7 @@ const fetchTikTokStats = async (postId) => {
       likes: parseInt(likes),
       comments: parseInt(comments),
       shares: parseInt(shares),
-      views: 0
+      views: 0 // TikTok doesn't show view count in embed
     };
   } catch (error) {
     console.error('Error fetching TikTok stats:', error);
@@ -75,21 +69,15 @@ const fetchYouTubeStats = async (postId) => {
   }
 };
 
-const refreshCampaignStats = async (campaign) => {
+export const refreshCampaignSocialMediaStats = async (campaign) => {
   try {
-    if (!campaign.socialMediaLinks || campaign.socialMediaLinks.length === 0) {
-      console.log(`No social media links for campaign ${campaign.id}`);
-      return null;
-    }
-
-    console.log(`Refreshing stats for campaign ${campaign.id}`);
     const updatedLinks = await Promise.all(
       campaign.socialMediaLinks.map(async (link) => {
         const platform = extractPlatformFromUrl(link.link);
         const postId = extractPostIdFromUrl(link.link, platform);
         
         if (!postId) {
-          console.error(`Invalid URL format for campaign ${campaign.id}:`, link.link);
+          console.error('Invalid URL format:', link.link);
           return link;
         }
 
@@ -112,91 +100,116 @@ const refreshCampaignStats = async (campaign) => {
           ...link,
           stats: {
             ...stats,
-            lastUpdated: FieldValue.serverTimestamp()
+            lastUpdated: new Date()
           }
         };
       })
     );
 
-    await db.collection('campaigns').doc(campaign.id).update({
+    // Update Firestore
+    const campaignRef = doc(db, 'campaigns', campaign.id);
+    await updateDoc(campaignRef, {
       socialMediaLinks: updatedLinks
     });
 
-    console.log(`Successfully updated stats for campaign ${campaign.id}`);
     return updatedLinks;
   } catch (error) {
-    console.error(`Error refreshing campaign ${campaign.id} stats:`, error);
+    console.error('Error refreshing social media stats:', error);
     throw error;
   }
 };
 
-// Run every hour
-exports.refreshAllCampaignStats = pubsub.schedule('every 60 minutes').onRun(async (context) => {
+export const validateSocialMediaUrl = (url) => {
+  const platform = extractPlatformFromUrl(url);
+  const postId = extractPostIdFromUrl(url, platform);
+  
+  if (platform === 'unknown') {
+    throw new Error('Unsupported platform. Please use Instagram, TikTok, or YouTube links.');
+  }
+  
+  if (!postId) {
+    throw new Error('Invalid URL format. Please check your link and try again.');
+  }
+  
+  return { platform, postId };
+};
+
+// Helper function to extract Instagram media ID from URL
+const extractInstagramMediaId = (url) => {
   try {
-    console.log('Starting scheduled refresh of all campaign stats');
-    const campaignsSnapshot = await db.collection('campaigns')
-      .where('status', '==', 'active')
-      .get();
+    // Handle different Instagram URL formats
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/');
+    
+    // Handle instagram.com/p/... format
+    if (pathParts.includes('p')) {
+      const shortcode = pathParts[pathParts.indexOf('p') + 1];
+      return shortcode;
+    }
+    
+    // Handle instagram.com/reel/... format
+    if (pathParts.includes('reel')) {
+      const shortcode = pathParts[pathParts.indexOf('reel') + 1];
+      return shortcode;
+    }
 
-    console.log(`Found ${campaignsSnapshot.size} active campaigns`);
-    const updatePromises = campaignsSnapshot.docs
-      .map(doc => ({ id: doc.id, ...doc.data() }))
-      .map(refreshCampaignStats);
-
-    await Promise.all(updatePromises);
-    console.log('Successfully completed refresh of all campaign stats');
     return null;
   } catch (error) {
-    console.error('Error in scheduled refresh:', error);
+    console.error('Error extracting Instagram media ID:', error);
+    return null;
+  }
+};
+
+// Function to update social media stats in Firestore
+export const updateSocialMediaStats = async (campaignId, linkIndex, stats) => {
+  try {
+    const campaignRef = doc(db, 'campaigns', campaignId);
+    await updateDoc(campaignRef, {
+      [`socialMediaLinks.${linkIndex}.stats`]: stats
+    });
+  } catch (error) {
+    console.error('Error updating social media stats:', error);
     throw error;
   }
-});
+};
 
-export const refreshSocialMediaStats = pubsub.schedule('*/30 * * * *').onRun(async (context) => {
-  const campaignsSnapshot = await db.collection('campaigns').get();
-
-  for (const doc of campaignsSnapshot.docs) {
-    const campaign = doc.data();
-    if (!campaign.socialMediaUrl) continue;
-
-    try {
-      const platform = extractPlatformFromUrl(campaign.socialMediaUrl);
-      const postId = extractPostIdFromUrl(campaign.socialMediaUrl, platform);
-
-      if (!postId) {
-        console.error(`Invalid URL format for campaign ${doc.id}`);
-        continue;
-      }
-
-      const response = await fetch(campaign.socialMediaUrl);
-      const html = await response.text();
-
-      let stats;
-      switch (platform) {
-        case 'instagram':
-          stats = parseInstagramStats(html);
-          break;
-        case 'tiktok':
-          stats = parseTikTokStats(html);
-          break;
-        case 'youtube':
-          stats = parseYouTubeStats(html);
-          break;
-        default:
-          console.error(`Unsupported platform for campaign ${doc.id}`);
-          continue;
-      }
-
-      await doc.ref.update({
-        stats: {
-          ...stats,
-          lastUpdated: FieldValue.serverTimestamp()
-        }
-      });
-
-      console.log(`Updated stats for campaign ${doc.id}:`, stats);
-    } catch (error) {
-      console.error(`Error updating stats for campaign ${doc.id}:`, error);
-    }
+export const updateRefreshInterval = async (campaignId, interval) => {
+  try {
+    const campaignRef = doc(db, 'campaigns', campaignId);
+    await updateDoc(campaignRef, {
+      refreshInterval: interval
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating refresh interval:', error);
+    throw error;
   }
-}); 
+};
+
+export const getSocialMediaStats = async (url) => {
+  const platform = extractPlatformFromUrl(url);
+  const postId = extractPostIdFromUrl(url, platform);
+
+  if (!postId) {
+    throw new Error('Invalid URL format');
+  }
+
+  try {
+    const response = await fetch(`/api/social-media-stats?url=${encodeURIComponent(url)}`);
+    const data = await response.text();
+
+    switch (platform) {
+      case 'instagram':
+        return parseInstagramStats(data);
+      case 'tiktok':
+        return parseTikTokStats(data);
+      case 'youtube':
+        return parseYouTubeStats(data);
+      default:
+        throw new Error('Unsupported platform');
+    }
+  } catch (error) {
+    console.error('Error fetching social media stats:', error);
+    throw error;
+  }
+}; 

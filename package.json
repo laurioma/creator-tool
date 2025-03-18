@@ -7,12 +7,40 @@
     "functions"
   ],
   "scripts": {
+    "install:all": "npm install && npm run install:frontend && npm run install:functions",
+    "install:frontend": "cd creator-tool-frontend && npm install",
+    "install:functions": "cd functions && npm install",
+    
     "start:frontend": "cd creator-tool-frontend && npm start",
-    "build:frontend": "cd creator-tool-frontend && npm run build",
     "start:functions": "cd functions && npm run serve",
+    "start:all": "concurrently \"npm run start:frontend\" \"npm run start:functions\"",
+    
+    "build:frontend": "cd creator-tool-frontend && npm run build",
     "build:functions": "cd functions && npm run build",
-    "deploy": "firebase deploy",
+    "build:all": "npm run build:frontend && npm run build:functions",
+    
+    "clean:frontend": "cd creator-tool-frontend && rm -rf build node_modules",
+    "clean:functions": "cd functions && rm -rf lib node_modules",
+    "clean:all": "npm run clean:frontend && npm run clean:functions && rm -rf node_modules",
+    
     "deploy:frontend": "firebase deploy --only hosting",
-    "deploy:functions": "firebase deploy --only functions"
+    "deploy:functions": "firebase deploy --only functions",
+    "deploy:all": "firebase deploy",
+    
+    "test:frontend": "cd creator-tool-frontend && npm test",
+    "test:functions": "cd functions && npm test",
+    "test:all": "npm run test:frontend && npm run test:functions",
+    
+    "lint:frontend": "cd creator-tool-frontend && npm run lint",
+    "lint:functions": "cd functions && npm run lint",
+    "lint:all": "npm run lint:frontend && npm run lint:functions",
+    
+    "dev": "npm run start:all",
+    "build": "npm run build:all",
+    "deploy": "npm run build:all && npm run deploy:all",
+    "clean": "npm run clean:all"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 } 

@@ -35,7 +35,12 @@ import {
 import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { refreshCampaignSocialMediaStats } from '../services/socialMediaApi';
+import {
+  refreshCampaignSocialMediaStats,
+  validateSocialMediaUrl,
+  updateSocialMediaStats,
+  updateRefreshInterval
+} from '../services/campaignStatsService';
 
 const drawerWidth = 240;
 
