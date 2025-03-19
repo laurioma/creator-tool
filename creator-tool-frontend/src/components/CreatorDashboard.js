@@ -203,9 +203,20 @@ export default function CreatorDashboard() {
         socialMediaLinks: arrayUnion(socialMediaData)
       });
 
+      // Update local state
+      setCampaigns(prevCampaigns => 
+        prevCampaigns.map(campaign => 
+          campaign.id === socialMediaDialog.campaignId
+            ? {
+                ...campaign,
+                socialMediaLinks: [...(campaign.socialMediaLinks || []), socialMediaData]
+              }
+            : campaign
+        )
+      );
+
       handleCloseSocialMedia();
-      // Refresh campaigns
-      setSelectedMenu(prev => prev);
+      setSuccess('Social media link added successfully!');
     } catch (error) {
       setSocialMediaError('Failed to add social media link: ' + error.message);
     }
@@ -327,7 +338,9 @@ export default function CreatorDashboard() {
                               {link.stats.comments !== undefined && ` | Comments: ${link.stats.comments}`}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" display="block">
-                              Last updated: {new Date(link.stats.lastUpdated.toDate()).toLocaleString()}
+                              Last updated: {link.stats.lastUpdated?.toDate 
+                                ? new Date(link.stats.lastUpdated.toDate()).toLocaleString()
+                                : new Date(link.stats.lastUpdated).toLocaleString()}
                             </Typography>
                           </Box>
                         ))}

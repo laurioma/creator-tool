@@ -8,12 +8,12 @@ A monorepo containing both the frontend React application and Firebase Cloud Fun
 creator-tool/
 ├── creator-tool-frontend/    # React frontend application
 │   ├── src/
-│   │   ├── shared/          # Code shared with Cloud Functions
 │   │   ├── services/        # Frontend services
 │   │   └── components/      # React components
 │   └── package.json         # Frontend dependencies
 ├── functions/               # Firebase Cloud Functions
 │   ├── src/                # Functions source code
+│   │   └── utils/          # Utility functions
 │   └── package.json        # Functions dependencies
 ├── package.json            # Root package.json with workspace config
 └── firebase.json           # Firebase configuration
@@ -168,7 +168,7 @@ FIREBASE_PROJECT_ID=your_project_id
 
 ## Development Guidelines
 
-1. **Code Sharing**: Common code between frontend and functions is kept in `creator-tool-frontend/src/shared/` and imported by both projects.
+1. **Code Organization**: Each project (frontend and functions) maintains its own codebase with appropriate separation of concerns.
 
 2. **Type Safety**: Functions are written in TypeScript for better type safety and developer experience.
 

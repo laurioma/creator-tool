@@ -1,73 +1,15 @@
 import { db } from '../firebase';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import {
   extractPlatformFromUrl,
   extractPostIdFromUrl,
+  fetchInstagramStats,
+  fetchTikTokStats,
+  fetchYouTubeStats,
   parseInstagramStats,
   parseTikTokStats,
   parseYouTubeStats
-} from '../shared/parsers/socialMediaParser';
-
-const PROXY_URL = 'https://api.allorigins.win/raw?url=';
-
-const fetchInstagramStats = async (postId) => {
-  try {
-    const response = await fetch(PROXY_URL + encodeURIComponent(`https://www.instagram.com/p/${postId}/embed/captioned`));
-    const html = await response.text();
-    
-    const likes = html.match(/(\d+(?:,\d+)*) likes/i)?.[1]?.replace(/,/g, '') || '0';
-    const views = html.match(/(\d+(?:,\d+)*) views/i)?.[1]?.replace(/,/g, '') || '0';
-    const comments = html.match(/(\d+(?:,\d+)*) comments/i)?.[1]?.replace(/,/g, '') || '0';
-
-    return {
-      likes: parseInt(likes),
-      views: parseInt(views),
-      comments: parseInt(comments)
-    };
-  } catch (error) {
-    console.error('Error fetching Instagram stats:', error);
-    return { likes: 0, views: 0, comments: 0 };
-  }
-};
-
-const fetchTikTokStats = async (postId) => {
-  try {
-    const response = await fetch(PROXY_URL + encodeURIComponent(`https://www.tiktok.com/embed/v2/${postId}`));
-    const html = await response.text();
-
-    const likes = html.match(/(\d+(?:,\d+)*) Likes/i)?.[1]?.replace(/,/g, '') || '0';
-    const comments = html.match(/(\d+(?:,\d+)*) Comments/i)?.[1]?.replace(/,/g, '') || '0';
-    const shares = html.match(/(\d+(?:,\d+)*) Shares/i)?.[1]?.replace(/,/g, '') || '0';
-
-    return {
-      likes: parseInt(likes),
-      comments: parseInt(comments),
-      shares: parseInt(shares),
-      views: 0 // TikTok doesn't show view count in embed
-    };
-  } catch (error) {
-    console.error('Error fetching TikTok stats:', error);
-    return { likes: 0, comments: 0, shares: 0, views: 0 };
-  }
-};
-
-const fetchYouTubeStats = async (postId) => {
-  try {
-    const response = await fetch(PROXY_URL + encodeURIComponent(`https://www.youtube.com/watch?v=${postId}`));
-    const html = await response.text();
-
-    const views = html.match(/"viewCount":"(\d+)"/)?.[1] || '0';
-    const likes = html.match(/"likes":"(\d+)"/)?.[1] || '0';
-
-    return {
-      views: parseInt(views),
-      likes: parseInt(likes)
-    };
-  } catch (error) {
-    console.error('Error fetching YouTube stats:', error);
-    return { views: 0, likes: 0 };
-  }
-};
+} from '../utils/socialMediaUtils';
 
 export const refreshCampaignSocialMediaStats = async (campaign) => {
   try {
@@ -208,6 +150,47 @@ export const getSocialMediaStats = async (url) => {
       default:
         throw new Error('Unsupported platform');
     }
+  } catch (error) {
+    console.error('Error fetching social media stats:', error);
+    throw error;
+  }
+};
+
+export const fetchSocialMediaStats = async (url) => {
+  try {
+    const platform = extractPlatformFromUrl(url);
+    const postId = extractPostIdFromUrl(url, platform);
+
+    if (!postId) {
+      throw new Error('Invalid URL format');
+    }
+
+    let stats;
+    switch (platform) {
+      case 'instagram':
+        stats = await fetchInstagramStats(postId);
+        break;
+      case 'tiktok':
+        stats = await fetchTikTokStats(postId);
+        break;
+      case 'youtube':
+        // TODO: Implement YouTube stats fetching
+        stats = {
+          views: 0,
+          likes: 0,
+          comments: 0
+        };
+        break;
+      default:
+        throw new Error('Unsupported platform. Please use Instagram, TikTok, or YouTube links.');
+    }
+
+    return {
+      platform,
+      postId,
+      stats,
+      lastUpdated: new Date().toISOString()
+    };
   } catch (error) {
     console.error('Error fetching social media stats:', error);
     throw error;
