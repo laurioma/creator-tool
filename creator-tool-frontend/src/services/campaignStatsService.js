@@ -76,32 +76,6 @@ export const validateSocialMediaUrl = (url) => {
   return { platform, postId };
 };
 
-// Helper function to extract Instagram media ID from URL
-const extractInstagramMediaId = (url) => {
-  try {
-    // Handle different Instagram URL formats
-    const urlObj = new URL(url);
-    const pathParts = urlObj.pathname.split('/');
-    
-    // Handle instagram.com/p/... format
-    if (pathParts.includes('p')) {
-      const shortcode = pathParts[pathParts.indexOf('p') + 1];
-      return shortcode;
-    }
-    
-    // Handle instagram.com/reel/... format
-    if (pathParts.includes('reel')) {
-      const shortcode = pathParts[pathParts.indexOf('reel') + 1];
-      return shortcode;
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Error extracting Instagram media ID:', error);
-    return null;
-  }
-};
-
 // Function to update social media stats in Firestore
 export const updateSocialMediaStats = async (campaignId, linkIndex, stats) => {
   try {

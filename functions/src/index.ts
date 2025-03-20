@@ -119,51 +119,5 @@ export const refreshAllCampaignStats = onSchedule('every 60 minutes', async (_ev
   }
 });
 
-export const refreshSocialMediaStats = onSchedule('*/30 * * * *', async (_event) => {
-  const campaignsSnapshot = await db.collection('campaigns').get();
-
-  for (const doc of campaignsSnapshot.docs) {
-    const campaign = doc.data() as Campaign;
-    if (!campaign.socialMediaUrl) continue;
-
-    try {
-      const platform = extractPlatformFromUrl(campaign.socialMediaUrl);
-      const postId = extractPostIdFromUrl(campaign.socialMediaUrl, platform);
-
-      if (!postId) {
-        console.error(`Invalid URL format for campaign ${doc.id}`);
-        continue;
-      }
-
-      let stats: SocialMediaStats;
-      switch (platform) {
-        case 'instagram':
-          stats = await fetchInstagramStats(postId);
-          break;
-        case 'tiktok':
-          stats = await fetchTikTokStats(postId);
-          break;
-        case 'youtube':
-          stats = await fetchYouTubeStats(postId);
-          break;
-        default:
-          console.error(`Unsupported platform for campaign ${doc.id}`);
-          continue;
-      }
-
-      await doc.ref.update({
-        stats: {
-          ...stats,
-          lastUpdated: FieldValue.serverTimestamp()
-        }
-      });
-
-      console.warn(`Updated stats for campaign ${doc.id}:`, stats);
-    } catch (error) {
-      console.error(`Error updating stats for campaign ${doc.id}:`, error);
-    }
-  }
-});
-
 // Re-export the HTTP endpoints
 export { getInstagramStats, getTikTokStats }; 

@@ -35,12 +35,8 @@ import {
 import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import {
-  refreshCampaignSocialMediaStats,
-  validateSocialMediaUrl,
-  updateSocialMediaStats,
-  updateRefreshInterval
-} from '../services/campaignStatsService';
+import { refreshCampaignSocialMediaStats } from '../services/campaignStatsService';
+import { extractPlatformFromUrl, extractPostIdFromUrl } from '../utils/socialMediaUtils';
 
 const drawerWidth = 240;
 
@@ -187,14 +183,30 @@ export default function CreatorDashboard() {
     setSocialMediaError('');
 
     try {
+      // Validate the URL first
+      const platform = extractPlatformFromUrl(socialMediaLink.link);
+      const postId = extractPostIdFromUrl(socialMediaLink.link, platform);
+      
+      if (!platform) {
+        setSocialMediaError('Invalid platform. Please use Instagram, TikTok, or YouTube links.');
+        return;
+      }
+      
+      if (!postId) {
+        setSocialMediaError('Invalid URL format. Please check your link and try again.');
+        return;
+      }
+
       const campaignRef = doc(db, 'campaigns', socialMediaDialog.campaignId);
       const socialMediaData = {
-        platform: socialMediaLink.platform,
+        platform,
         link: socialMediaLink.link,
         createdAt: new Date(),
         stats: {
           views: 0,
           likes: 0,
+          comments: 0,
+          shares: 0,
           lastUpdated: new Date()
         }
       };

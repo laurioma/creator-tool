@@ -1,7 +1,19 @@
+import { getAuth, getIdToken } from 'firebase/auth';
+
 // Common utilities for parsing social media URLs and stats
 const PROXY_URL = process.env.NODE_ENV === 'development'
   ? 'http://localhost:5001/reactapp-c5e96/us-central1/'
   : 'https://us-central1-reactapp-c5e96.cloudfunctions.net/';
+
+// Helper function to get auth token
+const getAuthToken = async () => {
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+  return await getIdToken(user);
+};
 
 export const extractPlatformFromUrl = (url) => {
   if (url.includes('instagram.com')) return 'instagram';
@@ -17,7 +29,34 @@ export const extractPostIdFromUrl = (url, platform) => {
       case 'instagram':
         return urlObj.pathname.split('/')[2];
       case 'tiktok':
-        return urlObj.pathname.split('/')[2];
+        // TikTok URLs can be in formats:
+        // https://www.tiktok.com/@username/video/1234567890
+        // https://vm.tiktok.com/1234567890
+        // https://www.tiktok.com/t/1234567890
+        const pathParts = urlObj.pathname.split('/');
+        
+        // Handle vm.tiktok.com format
+        if (urlObj.hostname === 'vm.tiktok.com') {
+          return pathParts[1];
+        }
+        
+        // Handle www.tiktok.com format
+        if (pathParts.includes('video')) {
+          return pathParts[pathParts.indexOf('video') + 1];
+        }
+        
+        // Handle t/ format
+        if (pathParts.includes('t')) {
+          return pathParts[pathParts.indexOf('t') + 1];
+        }
+        
+        // If no specific format found, try the last part
+        const lastPart = pathParts[pathParts.length - 1];
+        if (lastPart && /^\d+$/.test(lastPart)) {
+          return lastPart;
+        }
+        
+        return null;
       case 'youtube':
         return urlObj.searchParams.get('v');
       default:
@@ -30,7 +69,12 @@ export const extractPostIdFromUrl = (url, platform) => {
 
 export const fetchInstagramStats = async (postId) => {
   try {
-    const response = await fetch(`${PROXY_URL}getInstagramStats?postId=${encodeURIComponent(postId)}`);
+    const token = await getAuthToken();
+    const response = await fetch(`${PROXY_URL}getInstagramStats?postId=${encodeURIComponent(postId)}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
     if (!response.ok) {
       throw new Error('Failed to fetch Instagram stats');
     }
@@ -48,7 +92,12 @@ export const fetchInstagramStats = async (postId) => {
 
 export const fetchTikTokStats = async (postId) => {
   try {
-    const response = await fetch(`${PROXY_URL}getTikTokStats?postId=${encodeURIComponent(postId)}`);
+    const token = await getAuthToken();
+    const response = await fetch(`${PROXY_URL}getTikTokStats?postId=${encodeURIComponent(postId)}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
     if (!response.ok) {
       throw new Error('Failed to fetch TikTok stats');
     }
@@ -66,7 +115,12 @@ export const fetchTikTokStats = async (postId) => {
 
 export const fetchYouTubeStats = async (postId) => {
   try {
-    const response = await fetch(PROXY_URL + encodeURIComponent(`https://www.youtube.com/watch?v=${postId}`));
+    const token = await getAuthToken();
+    const response = await fetch(PROXY_URL + encodeURIComponent(`https://www.youtube.com/watch?v=${postId}`), {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
     const html = await response.text();
     return parseYouTubeStats(html);
   } catch (error) {
