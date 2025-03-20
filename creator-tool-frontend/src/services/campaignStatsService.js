@@ -102,34 +102,6 @@ export const updateRefreshInterval = async (campaignId, interval) => {
   }
 };
 
-export const getSocialMediaStats = async (url) => {
-  const platform = extractPlatformFromUrl(url);
-  const postId = extractPostIdFromUrl(url, platform);
-
-  if (!postId) {
-    throw new Error('Invalid URL format');
-  }
-
-  try {
-    const response = await fetch(`/api/social-media-stats?url=${encodeURIComponent(url)}`);
-    const data = await response.text();
-
-    switch (platform) {
-      case 'instagram':
-        return parseInstagramStats(data);
-      case 'tiktok':
-        return parseTikTokStats(data);
-      case 'youtube':
-        return parseYouTubeStats(data);
-      default:
-        throw new Error('Unsupported platform');
-    }
-  } catch (error) {
-    console.error('Error fetching social media stats:', error);
-    throw error;
-  }
-};
-
 export const fetchSocialMediaStats = async (url) => {
   try {
     const platform = extractPlatformFromUrl(url);

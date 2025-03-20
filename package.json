@@ -7,32 +7,28 @@
     "functions"
   ],
   "scripts": {
-    "install:all": "npm install && npm run install:frontend && npm run install:functions",
-    "install:frontend": "cd creator-tool-frontend && npm install",
-    "install:functions": "cd functions && npm install",
-    
-    "start:frontend": "cd creator-tool-frontend && npm start",
-    "start:functions": "cd functions && npm run serve",
+    "start:frontend": "npm run start -w creator-tool-frontend",
+    "start:functions": "npm run serve -w functions",
     "start:all": "concurrently \"npm run start:frontend\" \"npm run start:functions\"",
     
-    "build:frontend": "cd creator-tool-frontend && npm run build",
-    "build:functions": "cd functions && npm run build",
+    "build:frontend": "npm run build -w creator-tool-frontend",
+    "build:functions": "npm run build -w functions",
     "build:all": "npm run build:frontend && npm run build:functions",
     
-    "clean:frontend": "cd creator-tool-frontend && rm -rf build node_modules",
-    "clean:functions": "cd functions && rm -rf lib node_modules",
+    "clean:frontend": "npm run clean -w creator-tool-frontend",
+    "clean:functions": "npm run clean -w functions",
     "clean:all": "npm run clean:frontend && npm run clean:functions && rm -rf node_modules",
     
     "deploy:frontend": "firebase deploy --only hosting",
     "deploy:functions": "firebase deploy --only functions",
     "deploy:all": "firebase deploy",
     
-    "test:frontend": "cd creator-tool-frontend && npm test",
-    "test:functions": "cd functions && npm test",
+    "test:frontend": "npm run test -w creator-tool-frontend",
+    "test:functions": "npm run test -w functions",
     "test:all": "npm run test:frontend && npm run test:functions",
     
-    "lint:frontend": "cd creator-tool-frontend && npm run lint",
-    "lint:functions": "cd functions && npm run lint",
+    "lint:frontend": "npm run lint -w creator-tool-frontend",
+    "lint:functions": "npm run lint -w functions",
     "lint:all": "npm run lint:frontend && npm run lint:functions",
     
     "dev": "npm run start:all",

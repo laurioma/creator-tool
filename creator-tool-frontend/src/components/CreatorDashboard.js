@@ -50,7 +50,7 @@ export default function CreatorDashboard() {
   const { currentUser, userRole } = useAuth();
   const [refreshingStats, setRefreshingStats] = useState(false);
   const [socialMediaDialog, setSocialMediaDialog] = useState({ open: false, campaignId: null });
-  const [socialMediaLink, setSocialMediaLink] = useState({ platform: '', link: '' });
+  const [socialMediaLink, setSocialMediaLink] = useState({ link: '' });
   const [socialMediaError, setSocialMediaError] = useState('');
 
   const menuItems = [
@@ -168,13 +168,13 @@ export default function CreatorDashboard() {
 
   const handleAddSocialMedia = (campaignId) => {
     setSocialMediaDialog({ open: true, campaignId });
-    setSocialMediaLink({ platform: '', link: '' });
+    setSocialMediaLink({ link: '' });
     setSocialMediaError('');
   };
 
   const handleCloseSocialMedia = () => {
     setSocialMediaDialog({ open: false, campaignId: null });
-    setSocialMediaLink({ platform: '', link: '' });
+    setSocialMediaLink({ link: '' });
     setSocialMediaError('');
   };
 
@@ -239,8 +239,22 @@ export default function CreatorDashboard() {
       setRefreshingStats(true);
       await refreshCampaignSocialMediaStats(campaign);
       setSuccess('Social media stats updated successfully!');
-      // Refresh campaigns
-      setSelectedMenu(prev => prev);
+      
+      // Fetch updated campaign data
+      const campaignRef = doc(db, 'campaigns', campaign.id);
+      const campaignSnap = await getDoc(campaignRef);
+      if (campaignSnap.exists()) {
+        const updatedCampaign = {
+          id: campaignSnap.id,
+          ...campaignSnap.data()
+        };
+        // Update the specific campaign in the campaigns array
+        setCampaigns(prevCampaigns => 
+          prevCampaigns.map(c => 
+            c.id === campaign.id ? updatedCampaign : c
+          )
+        );
+      }
     } catch (error) {
       setError('Failed to update social media stats: ' + error.message);
     } finally {
@@ -409,34 +423,15 @@ export default function CreatorDashboard() {
                   {socialMediaError}
                 </Alert>
               )}
-              <Grid container spacing={2}>
-                <Grid item xs={12}>
-                  <TextField
-                    select
-                    required
-                    fullWidth
-                    label="Platform"
-                    value={socialMediaLink.platform}
-                    onChange={(e) => setSocialMediaLink(prev => ({ ...prev, platform: e.target.value }))}
-                  >
-                    <MenuItem value="">Select a platform</MenuItem>
-                    <MenuItem value="instagram">Instagram</MenuItem>
-                    <MenuItem value="tiktok">TikTok</MenuItem>
-                    <MenuItem value="twitter">X (Twitter)</MenuItem>
-                    <MenuItem value="youtube">YouTube</MenuItem>
-                  </TextField>
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    required
-                    fullWidth
-                    label="Link"
-                    value={socialMediaLink.link}
-                    onChange={(e) => setSocialMediaLink(prev => ({ ...prev, link: e.target.value }))}
-                    placeholder="https://..."
-                  />
-                </Grid>
-              </Grid>
+              <TextField
+                required
+                fullWidth
+                label="Social Media Link"
+                value={socialMediaLink.link}
+                onChange={(e) => setSocialMediaLink(prev => ({ ...prev, link: e.target.value }))}
+                placeholder="https://..."
+                helperText="Supported platforms: Instagram, TikTok, YouTube"
+              />
             </DialogContent>
             <DialogActions>
               <Button onClick={handleCloseSocialMedia}>Cancel</Button>

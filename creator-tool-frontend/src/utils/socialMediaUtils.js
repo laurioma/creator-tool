@@ -15,6 +15,34 @@ const getAuthToken = async () => {
   return await getIdToken(user);
 };
 
+// Common fetch function for social media stats
+const fetchSocialMediaStats = async (endpoint, postId) => {
+  try {
+    const token = await getAuthToken();
+    const response = await fetch(`${PROXY_URL}${endpoint}?postId=${encodeURIComponent(postId)}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${endpoint} stats`);
+    }
+    const data = await response.json();
+    return data.stats;
+  } catch (error) {
+    console.error(`Error fetching ${endpoint} stats:`, error);
+    return {
+      likes: 0,
+      comments: 0,
+      shares: 0
+    };
+  }
+};
+
+export const fetchInstagramStats = (postId) => fetchSocialMediaStats('getInstagramStats', postId);
+
+export const fetchTikTokStats = (postId) => fetchSocialMediaStats('getTikTokStats', postId);
+
 export const extractPlatformFromUrl = (url) => {
   if (url.includes('instagram.com')) return 'instagram';
   if (url.includes('tiktok.com')) return 'tiktok';
@@ -64,52 +92,6 @@ export const extractPostIdFromUrl = (url, platform) => {
     }
   } catch {
     return null;
-  }
-};
-
-export const fetchInstagramStats = async (postId) => {
-  try {
-    const token = await getAuthToken();
-    const response = await fetch(`${PROXY_URL}getInstagramStats?postId=${encodeURIComponent(postId)}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    if (!response.ok) {
-      throw new Error('Failed to fetch Instagram stats');
-    }
-    const data = await response.json();
-    return data.stats;
-  } catch (error) {
-    console.error('Error fetching Instagram stats:', error);
-    return {
-      likes: 0,
-      comments: 0,
-      shares: 0
-    };
-  }
-};
-
-export const fetchTikTokStats = async (postId) => {
-  try {
-    const token = await getAuthToken();
-    const response = await fetch(`${PROXY_URL}getTikTokStats?postId=${encodeURIComponent(postId)}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    if (!response.ok) {
-      throw new Error('Failed to fetch TikTok stats');
-    }
-    const data = await response.json();
-    return data.stats;
-  } catch (error) {
-    console.error('Error fetching TikTok stats:', error);
-    return {
-      likes: 0,
-      comments: 0,
-      shares: 0
-    };
   }
 };
 
