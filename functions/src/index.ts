@@ -1,15 +1,14 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import {
   extractPlatformFromUrl,
   extractPostIdFromUrl,
   fetchInstagramStats,
   fetchTikTokStats,
   fetchYouTubeStats
-} from './utils/socialMedia';
-import { getInstagramStats } from './platforms/instagram';
-import { getTikTokStats } from './platforms/tiktok';
+} from './socialMedia';
 
 // Types
 interface SocialMediaLink {
@@ -25,13 +24,6 @@ interface Campaign {
   socialMediaLinks?: SocialMediaLink[];
   status?: string;
   socialMediaUrl?: string;
-}
-
-interface SocialMediaStats {
-  likes: number;
-  comments: number;
-  shares: number;
-  views?: number;
 }
 
 // Initialize Firebase
@@ -56,7 +48,7 @@ const refreshCampaignStats = async (campaign: Campaign): Promise<SocialMediaLink
           return link;
         }
 
-        let stats: SocialMediaStats = {
+        let stats = {
           likes: 0,
           comments: 0,
           shares: 0
@@ -76,6 +68,7 @@ const refreshCampaignStats = async (campaign: Campaign): Promise<SocialMediaLink
             return link;
         }
 
+        // Create a new object that preserves all properties from the original link
         return {
           ...link,
           stats: {
@@ -119,5 +112,90 @@ export const refreshAllCampaignStats = onSchedule('every 60 minutes', async (_ev
   }
 });
 
-// Re-export the HTTP endpoints
-export { getInstagramStats, getTikTokStats }; 
+// TikTok Stats Callable Function
+export const getTikTokStats = onCall(async (request) => {
+  try {
+    const { postId } = request.data;
+
+    // Check authentication
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Authentication required');
+    }
+
+    // Check if postId is provided
+    if (!postId) {
+      throw new HttpsError('invalid-argument', 'Post ID is required');
+    }
+
+    try {
+      const stats = await fetchTikTokStats(postId);
+      return { stats };
+    } catch (error) {
+      console.error('Error in getTikTokStats:', error);
+      throw new HttpsError('internal', 'Failed to fetch TikTok stats');
+    }
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    throw new HttpsError('internal', 'An unexpected error occurred');
+  }
+});
+
+// Instagram Stats Function
+export const getInstagramStats = onCall(async (request) => {
+  try {
+    const { postId } = request.data;
+
+    // Check authentication
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Authentication required');
+    }
+
+    if (!postId) {
+      throw new HttpsError('invalid-argument', 'Post ID is required');
+    }
+
+    try {
+      const stats = await fetchInstagramStats(postId);
+      return { stats };
+    } catch (error) {
+      console.error('Error in getInstagramStats:', error);
+      throw new HttpsError('internal', 'Failed to fetch Instagram stats');
+    }
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    throw new HttpsError('internal', 'An unexpected error occurred');
+  }
+});
+
+// YouTube Stats Function
+export const getYouTubeStats = onCall(async (request) => {
+  try {
+    const { postId } = request.data;
+
+    // Check authentication
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Authentication required');
+    }
+
+    if (!postId) {
+      throw new HttpsError('invalid-argument', 'Post ID is required');
+    }
+
+    try {
+      const stats = await fetchYouTubeStats(postId);
+      return { stats };
+    } catch (error) {
+      console.error('Error in getYouTubeStats:', error);
+      throw new HttpsError('internal', 'Failed to fetch YouTube stats');
+    }
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    throw new HttpsError('internal', 'An unexpected error occurred');
+  }
+}); 

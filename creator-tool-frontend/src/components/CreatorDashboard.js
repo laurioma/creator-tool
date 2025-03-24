@@ -32,7 +32,7 @@ import {
   Close as CloseIcon,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { refreshCampaignSocialMediaStats } from '../services/campaignStatsService';
@@ -74,15 +74,25 @@ export default function CreatorDashboard() {
           // For my campaigns, show only campaigns where the creator is participating
           q = query(
             collection(db, 'campaigns'),
-            where('participants', 'array-contains', currentUser.uid)
+            where('creators', 'array-contains', currentUser.uid)
           );
         }
 
         const querySnapshot = await getDocs(q);
-        const campaignData = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
+        const campaignData = await Promise.all(querySnapshot.docs.map(async (doc) => {
+          const campaign = { id: doc.id, ...doc.data() };
+          
+          // Fetch links for each campaign
+          const linksRef = collection(db, 'campaigns', doc.id, 'links');
+          const linksSnapshot = await getDocs(linksRef);
+          campaign.links = linksSnapshot.docs.map(linkDoc => ({
+            id: linkDoc.id,
+            ...linkDoc.data()
+          }));
+          
+          return campaign;
         }));
+        
         setCampaigns(campaignData);
       } catch (error) {
         console.error('Error fetching campaigns:', error);
@@ -125,23 +135,20 @@ export default function CreatorDashboard() {
       }
 
       const campaignData = campaignSnap.data();
-      const currentParticipants = campaignData.participants || [];
+      const currentCreators = campaignData.creators || [];
       
-      console.log('Current Participants:', currentParticipants);
+      console.log('Current Creators:', currentCreators);
       console.log('Attempting to add user:', currentUser.uid);
       
-      if (currentParticipants.includes(currentUser.uid)) {
+      if (currentCreators.includes(currentUser.uid)) {
         setError('You have already joined this campaign');
         return;
       }
 
-      // Create a new participants array with the current user added
-      const newParticipants = [...currentParticipants, currentUser.uid];
-      console.log('New participants array:', newParticipants);
-      
-      // Update the campaign document with the new participants array
+      // Use arrayUnion to add the current user to the creators array
+      // This is more atomic and less likely to cause conflicts
       await updateDoc(campaignRef, {
-        participants: newParticipants
+        creators: arrayUnion(currentUser.uid)
       });
       
       setSuccess('Successfully joined the campaign!');
@@ -197,10 +204,12 @@ export default function CreatorDashboard() {
         return;
       }
 
-      const campaignRef = doc(db, 'campaigns', socialMediaDialog.campaignId);
-      const socialMediaData = {
+      // Add the link to the links subcollection
+      const linksRef = collection(db, 'campaigns', socialMediaDialog.campaignId, 'links');
+      const linkData = {
+        url: socialMediaLink.link,
         platform,
-        link: socialMediaLink.link,
+        creatorId: currentUser.uid,
         createdAt: new Date(),
         stats: {
           views: 0,
@@ -211,9 +220,7 @@ export default function CreatorDashboard() {
         }
       };
 
-      await updateDoc(campaignRef, {
-        socialMediaLinks: arrayUnion(socialMediaData)
-      });
+      const docRef = await addDoc(linksRef, linkData);
 
       // Update local state
       setCampaigns(prevCampaigns => 
@@ -221,7 +228,7 @@ export default function CreatorDashboard() {
           campaign.id === socialMediaDialog.campaignId
             ? {
                 ...campaign,
-                socialMediaLinks: [...(campaign.socialMediaLinks || []), socialMediaData]
+                links: [...(campaign.links || []), { id: docRef.id, ...linkData }]
               }
             : campaign
         )
@@ -237,25 +244,31 @@ export default function CreatorDashboard() {
   const handleRefreshStats = async (campaign) => {
     try {
       setRefreshingStats(true);
-      await refreshCampaignSocialMediaStats(campaign);
-      setSuccess('Social media stats updated successfully!');
+      const updatedLinks = await refreshCampaignSocialMediaStats(campaign);
       
-      // Fetch updated campaign data
+      // Get updated campaign from Firestore
       const campaignRef = doc(db, 'campaigns', campaign.id);
       const campaignSnap = await getDoc(campaignRef);
+      
       if (campaignSnap.exists()) {
+        // Create updated campaign object with refreshed links
         const updatedCampaign = {
           id: campaignSnap.id,
-          ...campaignSnap.data()
+          ...campaignSnap.data(),
+          links: updatedLinks // Use the returned updated links
         };
+        
         // Update the specific campaign in the campaigns array
         setCampaigns(prevCampaigns => 
           prevCampaigns.map(c => 
             c.id === campaign.id ? updatedCampaign : c
           )
         );
+        
+        setSuccess('Social media stats updated successfully!');
       }
     } catch (error) {
+      console.error('Failed to update social media stats:', error);
       setError('Failed to update social media stats: ' + error.message);
     } finally {
       setRefreshingStats(false);
@@ -339,7 +352,7 @@ export default function CreatorDashboard() {
                     </Typography>
 
                     {/* Social Media Links Section */}
-                    {campaign.participants?.includes(currentUser.uid) && (
+                    {campaign.creators?.includes(currentUser.uid) && selectedMenu === 'myCampaigns' && (
                       <Box sx={{ mt: 2 }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                           <Typography variant="subtitle2">
@@ -354,20 +367,30 @@ export default function CreatorDashboard() {
                             Refresh Stats
                           </Button>
                         </Box>
-                        {campaign.socialMediaLinks?.map((link, index) => (
-                          <Box key={index} sx={{ mb: 1 }}>
+                        {campaign.links?.map((link) => (
+                          <Box key={link.id} sx={{ mb: 1 }}>
                             <Typography variant="caption" display="block">
-                              {link.platform}: {link.link}
+                              {link.platform || extractPlatformFromUrl(link.url) || 'Unknown'}: {link.url}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Views: {link.stats.views} | Likes: {link.stats.likes}
-                              {link.stats.comments !== undefined && ` | Comments: ${link.stats.comments}`}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" display="block">
-                              Last updated: {link.stats.lastUpdated?.toDate 
-                                ? new Date(link.stats.lastUpdated.toDate()).toLocaleString()
-                                : new Date(link.stats.lastUpdated).toLocaleString()}
-                            </Typography>
+                            {link.stats ? (
+                              <>
+                                <Typography variant="caption" color="text.secondary">
+                                  Views: {link.stats.views || 0} | Likes: {link.stats.likes || 0}
+                                  {link.stats.comments !== undefined && ` | Comments: ${link.stats.comments}`}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  Last updated: {link.stats.lastUpdated?.toDate 
+                                    ? new Date(link.stats.lastUpdated.toDate()).toLocaleString()
+                                    : link.stats.lastUpdated
+                                      ? new Date(link.stats.lastUpdated).toLocaleString()
+                                      : 'Never'}
+                                </Typography>
+                              </>
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">
+                                No stats available yet. Click 'Refresh Stats' to fetch current data.
+                              </Typography>
+                            )}
                           </Box>
                         ))}
                         <Button
@@ -388,9 +411,9 @@ export default function CreatorDashboard() {
                         fullWidth
                         sx={{ mt: 2 }}
                         onClick={() => handleJoinCampaign(campaign.id)}
-                        disabled={joiningCampaign === campaign.id || campaign.participants?.includes(currentUser.uid)}
+                        disabled={joiningCampaign === campaign.id || campaign.creators?.includes(currentUser.uid)}
                       >
-                        {campaign.participants?.includes(currentUser.uid) 
+                        {campaign.creators?.includes(currentUser.uid) 
                           ? 'Already Joined' 
                           : joiningCampaign === campaign.id 
                             ? 'Joining...' 

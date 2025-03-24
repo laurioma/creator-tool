@@ -20,7 +20,7 @@ import {
 import { Add as AddIcon, Close as CloseIcon, Share as ShareIcon } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
-import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 
 export default function BrandDashboard() {
   const [open, setOpen] = useState(false);
@@ -44,9 +44,18 @@ export default function BrandDashboard() {
           where('brandId', '==', currentUser.uid)
         );
         const querySnapshot = await getDocs(q);
-        const campaignData = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
+        const campaignData = await Promise.all(querySnapshot.docs.map(async (doc) => {
+          const campaign = { id: doc.id, ...doc.data() };
+          
+          // Fetch links for each campaign
+          const linksRef = collection(db, 'campaigns', doc.id, 'links');
+          const linksSnapshot = await getDocs(linksRef);
+          campaign.links = linksSnapshot.docs.map(linkDoc => ({
+            id: linkDoc.id,
+            ...linkDoc.data()
+          }));
+          
+          return campaign;
         }));
         setCampaigns(campaignData);
       } catch (error) {
@@ -114,12 +123,34 @@ export default function BrandDashboard() {
         brandId: currentUser.uid,
         brandName: currentUser.displayName || 'Anonymous Brand',
         createdAt: new Date().toISOString(),
-        status: 'active'
+        status: 'active',
+        creators: [] // Initialize empty creators array
       };
 
       await addDoc(collection(db, 'campaigns'), campaign);
       setSuccess(true);
       handleClose();
+      
+      // Refresh campaigns list
+      const q = query(
+        collection(db, 'campaigns'),
+        where('brandId', '==', currentUser.uid)
+      );
+      const querySnapshot = await getDocs(q);
+      const campaignData = await Promise.all(querySnapshot.docs.map(async (doc) => {
+        const campaign = { id: doc.id, ...doc.data() };
+        
+        // Fetch links for each campaign
+        const linksRef = collection(db, 'campaigns', doc.id, 'links');
+        const linksSnapshot = await getDocs(linksRef);
+        campaign.links = linksSnapshot.docs.map(linkDoc => ({
+          id: linkDoc.id,
+          ...linkDoc.data()
+        }));
+        
+        return campaign;
+      }));
+      setCampaigns(campaignData);
     } catch (error) {
       console.error('Error creating campaign:', error);
       setError(
@@ -168,10 +199,10 @@ export default function BrandDashboard() {
                 <Typography variant="subtitle2" gutterBottom>
                   Social Media Performance
                 </Typography>
-                {campaign.socialMediaLinks?.length > 0 ? (
+                {campaign.links && campaign.links.length > 0 ? (
                   <Grid container spacing={2}>
-                    {campaign.socialMediaLinks.map((link, index) => (
-                      <Grid item xs={12} key={index}>
+                    {campaign.links.map((link) => (
+                      <Grid item xs={12} key={link.id}>
                         <Paper variant="outlined" sx={{ p: 2 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                             <ShareIcon sx={{ mr: 1 }} />
@@ -180,7 +211,7 @@ export default function BrandDashboard() {
                             </Typography>
                           </Box>
                           <Typography variant="caption" display="block" sx={{ mb: 1 }}>
-                            {link.link}
+                            {link.url}
                           </Typography>
                           <Grid container spacing={2}>
                             <Grid item xs={6}>
@@ -237,69 +268,47 @@ export default function BrandDashboard() {
                 {error}
               </Alert>
             )}
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  autoFocus
-                  required
-                  name="name"
-                  label="Campaign Name"
-                  fullWidth
-                  value={campaignData.name}
-                  onChange={handleChange}
-                  error={!!error && error.includes('name')}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  required
-                  name="budget"
-                  label="Budget"
-                  type="number"
-                  fullWidth
-                  value={campaignData.budget}
-                  onChange={handleChange}
-                  error={!!error && error.includes('budget')}
-                  InputProps={{
-                    startAdornment: '$',
-                    inputProps: { min: 0 }
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  required
-                  name="description"
-                  label="Description"
-                  multiline
-                  rows={4}
-                  fullWidth
-                  value={campaignData.description}
-                  onChange={handleChange}
-                  error={!!error && error.includes('description')}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  name="logoUrl"
-                  label="Logo URL"
-                  fullWidth
-                  value={campaignData.logoUrl}
-                  onChange={handleChange}
-                  helperText="Enter the URL of your campaign logo (optional)"
-                />
-              </Grid>
-            </Grid>
+            <TextField
+              required
+              fullWidth
+              label="Campaign Name"
+              name="name"
+              value={campaignData.name}
+              onChange={handleChange}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              required
+              fullWidth
+              label="Budget"
+              name="budget"
+              type="number"
+              value={campaignData.budget}
+              onChange={handleChange}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              required
+              fullWidth
+              label="Description"
+              name="description"
+              multiline
+              rows={4}
+              value={campaignData.description}
+              onChange={handleChange}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              fullWidth
+              label="Logo URL (optional)"
+              name="logoUrl"
+              value={campaignData.logoUrl}
+              onChange={handleChange}
+            />
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleClose} disabled={loading}>
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              variant="contained"
-              disabled={loading}
-            >
+            <Button onClick={handleClose}>Cancel</Button>
+            <Button type="submit" variant="contained" disabled={loading}>
               {loading ? 'Creating...' : 'Create Campaign'}
             </Button>
           </DialogActions>
@@ -311,9 +320,9 @@ export default function BrandDashboard() {
         open={success}
         autoHideDuration={6000}
         onClose={() => setSuccess(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity="success" sx={{ width: '100%' }}>
+        <Alert onClose={() => setSuccess(false)} severity="success" sx={{ width: '100%' }}>
           Campaign created successfully!
         </Alert>
       </Snackbar>

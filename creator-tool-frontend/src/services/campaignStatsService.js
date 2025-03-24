@@ -1,59 +1,90 @@
 import { db } from '../firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import {
   extractPlatformFromUrl,
   extractPostIdFromUrl,
   fetchInstagramStats,
   fetchTikTokStats,
   fetchYouTubeStats,
-  parseInstagramStats,
-  parseTikTokStats,
-  parseYouTubeStats
 } from '../utils/socialMediaUtils';
 
 export const refreshCampaignSocialMediaStats = async (campaign) => {
   try {
+    // Get all links for the campaign
+    const linksRef = collection(db, 'campaigns', campaign.id, 'links');
+    const linksSnapshot = await getDocs(linksRef);
+    
+    if (linksSnapshot.empty) {
+      console.warn(`No links found for campaign ${campaign.id}`);
+      return [];
+    }
+    
+    console.log(`Refreshing ${linksSnapshot.size} links for campaign ${campaign.id}`);
+    
     const updatedLinks = await Promise.all(
-      campaign.socialMediaLinks.map(async (link) => {
-        const platform = extractPlatformFromUrl(link.link);
-        const postId = extractPostIdFromUrl(link.link, platform);
+      linksSnapshot.docs.map(async (linkDoc) => {
+        const link = linkDoc.data();
+        const url = link.url;
+        const platform = extractPlatformFromUrl(url);
+        const postId = extractPostIdFromUrl(url, platform);
         
         if (!postId) {
-          console.error('Invalid URL format:', link.link);
-          return link;
+          console.error('Invalid URL format:', url);
+          return { id: linkDoc.id, ...link };
         }
 
-        let stats = {};
-        switch (platform) {
-          case 'instagram':
-            stats = await fetchInstagramStats(postId);
-            break;
-          case 'tiktok':
-            stats = await fetchTikTokStats(postId);
-            break;
-          case 'youtube':
-            stats = await fetchYouTubeStats(postId);
-            break;
-          default:
-            return link;
-        }
-
-        return {
-          ...link,
-          stats: {
-            ...stats,
-            lastUpdated: new Date()
+        try {
+          let stats = {};
+          switch (platform) {
+            case 'instagram':
+              stats = await fetchInstagramStats(postId);
+              break;
+            case 'tiktok':
+              stats = await fetchTikTokStats(postId);
+              break;
+            case 'youtube':
+              stats = await fetchYouTubeStats(postId);
+              break;
+            default:
+              return { id: linkDoc.id, ...link };
           }
-        };
+          
+          console.log(`Successfully fetched stats for ${platform} post:`, stats);
+          
+          // Create updated link data with platform info - preserve all existing fields
+          const updatedLink = {
+            ...link,
+            url,
+            platform, // Ensure platform is included
+            stats: {
+              ...stats,
+              lastUpdated: new Date()
+            }
+          };
+          
+          // Update the link document with new stats and platform
+          await updateDoc(doc(db, 'campaigns', campaign.id, 'links', linkDoc.id), {
+            platform,
+            stats: updatedLink.stats
+          });
+          
+          return {
+            id: linkDoc.id,
+            ...updatedLink
+          };
+        } catch (error) {
+          console.error(`Error fetching stats for ${platform} post:`, error);
+          // Return original link if stats fetch fails, with platform added
+          return { 
+            id: linkDoc.id, 
+            ...link, 
+            platform: platform || 'unknown' 
+          };
+        }
       })
     );
 
-    // Update Firestore
-    const campaignRef = doc(db, 'campaigns', campaign.id);
-    await updateDoc(campaignRef, {
-      socialMediaLinks: updatedLinks
-    });
-
+    console.log(`Successfully updated ${updatedLinks.length} links for campaign ${campaign.id}`);
     return updatedLinks;
   } catch (error) {
     console.error('Error refreshing social media stats:', error);
@@ -77,11 +108,14 @@ export const validateSocialMediaUrl = (url) => {
 };
 
 // Function to update social media stats in Firestore
-export const updateSocialMediaStats = async (campaignId, linkIndex, stats) => {
+export const updateSocialMediaStats = async (campaignId, linkId, stats) => {
   try {
-    const campaignRef = doc(db, 'campaigns', campaignId);
-    await updateDoc(campaignRef, {
-      [`socialMediaLinks.${linkIndex}.stats`]: stats
+    const linkRef = doc(db, 'campaigns', campaignId, 'links', linkId);
+    await updateDoc(linkRef, {
+      stats: {
+        ...stats,
+        lastUpdated: new Date()
+      }
     });
   } catch (error) {
     console.error('Error updating social media stats:', error);

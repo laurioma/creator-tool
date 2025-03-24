@@ -53,11 +53,8 @@ export default function Signup() {
       setError('');
       setLoading(true);
       
-      // Create the user account
-      const { user } = await signup(email, password);
-      
-      // Update the user's profile with display name and custom claims
-      await updateUserProfile(user, {
+      // Create the user account and profile in one operation
+      const { user } = await signup(email, password, {
         displayName: displayName,
         photoURL: null,
         accountType: accountType
