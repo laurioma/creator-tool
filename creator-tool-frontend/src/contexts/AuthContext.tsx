@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { 
+  User,
+  UserCredential,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
@@ -10,18 +12,43 @@ import {
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
-const AuthContext = createContext();
-
-export function useAuth() {
-  return useContext(AuthContext);
+interface Profile {
+  displayName: string;
+  photoURL?: string;
+  accountType: string;
 }
 
-export function AuthProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [userRole, setUserRole] = useState(null);
+interface AuthContextType {
+  currentUser: User | null;
+  userRole: string | null;
+  signup: (email: string, password: string, profile: Profile) => Promise<UserCredential>;
+  login: (email: string, password: string) => Promise<UserCredential>;
+  logout: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  updateUserProfile: (user: User, profile: Profile) => Promise<void>;
+  getUserRole: (uid: string) => Promise<string | null>;
+}
+
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function useAuth(): AuthContextType {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}
+
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function signup(email, password, profile) {
+  async function signup(email: string, password: string, profile: Profile): Promise<UserCredential> {
     try {
       // Create the user account
       const result = await createUserWithEmailAndPassword(auth, email, password);
@@ -49,20 +76,20 @@ export function AuthProvider({ children }) {
     }
   }
 
-  async function login(email, password) {
+  async function login(email: string, password: string): Promise<UserCredential> {
     const result = await signInWithEmailAndPassword(auth, email, password);
     return result;
   }
 
-  function logout() {
+  function logout(): Promise<void> {
     return signOut(auth);
   }
 
-  function resetPassword(email) {
+  function resetPassword(email: string): Promise<void> {
     return sendPasswordResetEmail(auth, email);
   }
 
-  async function updateUserProfile(user, profile) {
+  async function updateUserProfile(user: User, profile: Profile): Promise<void> {
     try {
       // Update the user's display name in Firebase Auth
       await updateProfile(user, {
@@ -84,7 +111,7 @@ export function AuthProvider({ children }) {
     }
   }
 
-  async function getUserRole(uid) {
+  async function getUserRole(uid: string): Promise<string | null> {
     try {
       const userRef = doc(db, 'users', uid);
       const userDoc = await getDoc(userRef);
@@ -119,7 +146,7 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
-  const value = {
+  const value: AuthContextType = {
     currentUser,
     userRole,
     signup,

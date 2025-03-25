@@ -1,3 +1,4 @@
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // Helper function to check if user is authenticated
@@ -10,33 +11,18 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Helper function to check if user is a creator of the campaign
-    function isCreator(campaignId) {
-      return isAuthenticated() && 
-        get(/databases/$(database)/documents/campaigns/$(campaignId)).data.creators.hasAny([request.auth.uid]);
+    // Helper function to check if user is a brand owner of the campaign
+    function isBrand(campaignId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/campaigns/$(campaignId)) &&
+        get(/databases/$(database)/documents/campaigns/$(campaignId)).data.brandId == request.auth.uid;
     }
 
-    // Helper function to check if the update only adds the current user to creators
-    function isAddingSelfToCreators() {
-      let newData = request.resource.data;
-      let oldData = resource.data;
-      
-      // Check if all fields except creators remain the same
-      let otherFieldsSame = newData.brandId == oldData.brandId &&
-                           newData.name == oldData.name &&
-                           newData.description == oldData.description &&
-                           newData.budget == oldData.budget &&
-                           newData.status == oldData.status &&
-                           newData.createdAt == oldData.createdAt;
-      
-      // Check if the only change to creators is adding the current user
-      let oldCreators = oldData.creators || [];
-      let newCreators = newData.creators || [];
-      let onlyAddedSelf = newCreators.size() == oldCreators.size() + 1 &&
-                         newCreators.hasAll(oldCreators) &&
-                         newCreators.hasAny([request.auth.uid]);
-      
-      return otherFieldsSame && onlyAddedSelf;
+    // Helper function to check if user is a creator for the campaign
+    function isCreatorForCampaign(campaignId) {
+      // We can only check the explicit document ID format in security rules
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/campaignCreators/$(request.auth.uid + '_' + campaignId));
     }
 
     // Users collection rules
@@ -59,27 +45,45 @@ service cloud.firestore {
       );
       allow delete: if isAuthenticated() && resource.data.brandId == request.auth.uid;
     }
+    
+    // Campaign Creators collection rules
+    match /campaignCreators/{docId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        // Brand can update
+        docId.split('_')[0] == request.auth.uid ||
+        // Creator can update their own assignments
+        docId.split('_')[1] == request.auth.uid
+      );
+      allow delete: if isAuthenticated() && (
+        // Brand can delete
+        docId.split('_')[0] == request.auth.uid ||
+        // Creator can delete their own assignments
+        docId.split('_')[1] == request.auth.uid
+      );
+    }
 
     // Links collection rules
     match /campaigns/{campaignId}/links/{linkId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && (
         // Brand can create links
-        get(/databases/$(database)/documents/campaigns/$(campaignId)).data.brandId == request.auth.uid ||
-        // Creator can create links for their assigned campaigns
-        isCreator(campaignId)
+        isBrand(campaignId) ||
+        // Creator can create links if they have a document in campaignCreators with explicit ID format
+        isCreatorForCampaign(campaignId)
       );
       allow update: if isAuthenticated() && (
         // Brand can update any link
-        get(/databases/$(database)/documents/campaigns/$(campaignId)).data.brandId == request.auth.uid ||
+        isBrand(campaignId) ||
         // Creator can only update their own links
-        (isCreator(campaignId) && resource.data.creatorId == request.auth.uid)
+        resource.data.creatorId == request.auth.uid
       );
       allow delete: if isAuthenticated() && (
         // Brand can delete any link
-        get(/databases/$(database)/documents/campaigns/$(campaignId)).data.brandId == request.auth.uid ||
+        isBrand(campaignId) ||
         // Creator can only delete their own links
-        (isCreator(campaignId) && resource.data.creatorId == request.auth.uid)
+        resource.data.creatorId == request.auth.uid
       );
     }
 

@@ -11,24 +11,30 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^13.5.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.13.13",
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.4",
     "firebase": "^11.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.3.0",
-    "react-scripts": "5.0.1",
+    "typescript": "^5.8.2",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "test:ci": "react-scripts test --watchAll=false",
-    "eject": "react-scripts eject",
+    "start": "concurrently \"cross-env NODE_ENV=development node esbuild.config.js --watch\" \"npm run typecheck:watch\"",
+    "prebuild": "npm run typecheck",
+    "build": "cross-env NODE_ENV=production node esbuild.config.js",
+    "build:full": "concurrently \"npm run typecheck\" \"cross-env NODE_ENV=production node esbuild.config.js\"",
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --noEmit --watch",
+    "test": "jest",
+    "test:ci": "jest --watchAll=false",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "clean": "rm -rf build node_modules",
-    "deploy": "npm run build && firebase deploy --only hosting",
-    "analyze": "source-map-explorer 'build/static/js/*.js'"
+    "deploy": "npm run build:full && firebase deploy --only hosting"
   },
   "eslintConfig": {
     "extends": [
@@ -49,8 +55,14 @@
     ]
   },
   "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.4.7",
+    "esbuild": "^0.25.1",
+    "esbuild-node-externals": "^1.18.0",
     "eslint": "^8.9.0",
     "eslint-config-react-app": "^7.0.1",
+    "jest": "^29.7.0",
     "source-map-explorer": "^2.5.3"
   }
 }
