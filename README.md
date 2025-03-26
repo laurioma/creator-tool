@@ -2,6 +2,48 @@
 
 A monorepo containing both the frontend React application and Firebase Cloud Functions for the Creator Tool platform.
 
+## Quick Start
+
+1. **Clone and install**
+   ```bash
+   git clone https://github.com/yourusername/creator-tool.git
+   cd creator-tool
+   npm install
+   ```
+
+2. **Deploy to Firebase**
+   ```bash
+   # Deploy everything (builds first)
+   npm run deploy
+   
+   # Or deploy specific parts
+   npm run deploy:frontend  # Deploy only frontend
+   npm run deploy:functions # Deploy only functions
+   ```
+
+## Local Development
+
+1. **Start development servers**
+   ```bash
+   npm run dev
+   ```
+   This will start both the frontend (http://localhost:3000) and functions emulator.
+
+2. **Available development commands**
+   ```bash
+   # Start only frontend
+   npm run start:frontend
+   
+   # Start only functions emulator
+   npm run start:functions
+   
+   # Build for development
+   npm run build
+   
+   # Run tests
+   npm run test:all
+   ```
+
 ## Project Structure
 
 ```
@@ -10,34 +52,26 @@ creator-tool/
 │   ├── src/
 │   │   ├── services/        # Frontend services
 │   │   └── components/      # React components
-│   └── package.json         # Frontend dependencies
-├── functions/               # Firebase Cloud Functions
-│   ├── src/                # Functions source code
-│   │   └── utils/          # Utility functions
-│   └── package.json        # Functions dependencies
-├── package.json            # Root package.json with workspace config
-└── firebase.json           # Firebase configuration
+│   ├── public/             # Static assets
+│   ├── .env               # Frontend environment variables
+│   └── package.json       # Frontend dependencies
+├── functions/             # Firebase Cloud Functions
+│   ├── src/              # Functions source code
+│   │   └── utils/        # Utility functions
+│   └── package.json      # Functions dependencies
+├── .firebaserc          # Firebase project configuration
+├── firebase.json        # Firebase hosting and functions config
+├── firestore.rules      # Firestore security rules
+├── firestore.indexes.json # Firestore indexes
+├── package.json         # Root package.json with workspace config
+└── .gitignore          # Git ignore rules
 ```
 
 ## Available Scripts
 
 The project uses npm workspaces to manage both the frontend and Cloud Functions. All commands can be run from the root directory.
 
-### Installation
-
-```bash
-# Install all dependencies (root, frontend, and functions)
-npm run install:all
-
-# Install only frontend dependencies
-npm run install:frontend
-
-# Install only functions dependencies
-npm run install:functions
-```
-
 ### Development
-
 ```bash
 # Start both frontend and functions in development mode
 npm run dev
@@ -52,7 +86,6 @@ npm run start:functions
 ```
 
 ### Building
-
 ```bash
 # Build everything
 npm run build
@@ -66,51 +99,31 @@ npm run build:frontend
 npm run build:functions
 ```
 
-### Deployment
-
-```bash
-# Deploy everything (builds first)
-npm run deploy
-
-# Deploy only frontend
-npm run deploy:frontend
-
-# Deploy only functions
-npm run deploy:functions
-```
-
 ### Testing
-
 ```bash
 # Run all tests
 npm run test:all
 
 # Test frontend
 npm run test:frontend
-# Run frontend tests in CI mode (no watch)
-cd creator-tool-frontend && npm run test:ci
 
 # Test functions
 npm run test:functions
 ```
 
 ### Linting
-
 ```bash
 # Lint everything
 npm run lint:all
 
-# Lint and fix frontend
+# Lint frontend
 npm run lint:frontend
-cd creator-tool-frontend && npm run lint:fix
 
-# Lint and fix functions
+# Lint functions
 npm run lint:functions
-cd functions && npm run lint:fix
 ```
 
 ### Cleaning
-
 ```bash
 # Clean everything (removes node_modules and build artifacts)
 npm run clean
@@ -122,55 +135,11 @@ npm run clean:frontend
 npm run clean:functions
 ```
 
-### Additional Tools
-
-#### Frontend
-
-```bash
-# Analyze bundle size
-cd creator-tool-frontend && npm run analyze
-
-# Eject from Create React App
-cd creator-tool-frontend && npm run eject
-```
-
-#### Functions
-
-```bash
-# Watch for TypeScript changes
-cd functions && npm run build:watch
-
-# Access Firebase Functions shell
-cd functions && npm run shell
-
-# View Functions logs
-cd functions && npm run logs
-```
-
-## Environment Setup
-
-### Frontend (.env)
-
-```env
-REACT_APP_FIREBASE_API_KEY=your_api_key
-REACT_APP_FIREBASE_AUTH_DOMAIN=your_auth_domain
-REACT_APP_FIREBASE_PROJECT_ID=your_project_id
-REACT_APP_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
-REACT_APP_FIREBASE_APP_ID=your_app_id
-```
-
-### Functions (.env)
-
-```env
-FIREBASE_PROJECT_ID=your_project_id
-```
-
 ## Development Guidelines
 
 1. **Code Organization**: Each project (frontend and functions) maintains its own codebase with appropriate separation of concerns.
 
-2. **Type Safety**: Functions are written in TypeScript for better type safety and developer experience.
+2. **Type Safety**: Both frontend and functions are written in TypeScript for better type safety and developer experience.
 
 3. **Testing**: Both frontend and functions have their own test suites. Run tests before committing changes.
 
@@ -183,7 +152,7 @@ FIREBASE_PROJECT_ID=your_project_id
 1. **Clean Install**: If you encounter dependency issues, try:
    ```bash
    npm run clean
-   npm run install:all
+   npm install
    ```
 
 2. **Emulator Issues**: If functions emulator fails to start:
@@ -195,10 +164,9 @@ FIREBASE_PROJECT_ID=your_project_id
    npm run serve
    ```
 
-3. **Build Errors**: For TypeScript errors in functions:
+3. **Build Errors**: For TypeScript errors:
    ```bash
-   cd functions
-   npm run lint:fix
+   npm run lint:all
    npm run build
    ```
 
